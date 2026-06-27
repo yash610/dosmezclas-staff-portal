@@ -15,7 +15,7 @@ router.get('/', authRequired, adminOnly, async (req, res) => {
      FROM employees e
      LEFT JOIN roles r ON r.id = e.role_id
      LEFT JOIN users u ON u.id = e.user_id
-     ${includeInactive ? '' : 'WHERE e.is_active = 1'}
+     ${includeInactive ? '' : 'WHERE e.is_active = TRUE'}
      ORDER BY e.full_name`,
     [],
   );
@@ -53,8 +53,8 @@ router.post('/', authRequired, adminOnly, async (req, res) => {
 
   const hash = await bcrypt.hash(password, 10);
   const u = await db.run(
-    `INSERT INTO users (email, password_hash, role, is_active) VALUES ($1, $2, 'employee', 1)`,
-    [email, hash],
+    `INSERT INTO users (email, password_hash, role, is_active) VALUES ($1, $2, 'employee', $3)`,
+    [email, hash, true],
   );
   const userId = db.client === 'pg'
     ? (await db.get(`SELECT id FROM users WHERE email = $1`, [email])).id
@@ -62,8 +62,8 @@ router.post('/', authRequired, adminOnly, async (req, res) => {
 
   const e = await db.run(
     `INSERT INTO employees (user_id, full_name, phone, role_id, hourly_rate, hire_date, is_active, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, 1, $7)`,
-    [userId, full_name, phone, role_id || null, hourly_rate || 0, hire_date || null, notes || null],
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [userId, full_name, phone, role_id || null, hourly_rate || 0, hire_date || null, true, notes || null],
   );
   const employeeId = db.client === 'pg'
     ? (await db.get(`SELECT id FROM employees WHERE user_id = $1`, [userId])).id
@@ -95,9 +95,9 @@ router.patch('/:id', authRequired, adminOnly, async (req, res) => {
 router.patch('/:id/deactivate', authRequired, adminOnly, async (req, res) => {
   const emp = await db.get(`SELECT user_id FROM employees WHERE id = $1`, [req.params.id]);
   if (!emp) return res.status(404).json({ error: 'Not found' });
-  await db.run(`UPDATE employees SET is_active = 0 WHERE id = $1`, [req.params.id]);
+  await db.run(`UPDATE employees SET is_active = $1 WHERE id = $2`, [false, req.params.id]);
   if (emp.user_id) {
-    await db.run(`UPDATE users SET is_active = 0 WHERE id = $1`, [emp.user_id]);
+    await db.run(`UPDATE users SET is_active = $1 WHERE id = $2`, [false, emp.user_id]);
   }
   res.json({ ok: true });
 });
@@ -106,9 +106,9 @@ router.patch('/:id/deactivate', authRequired, adminOnly, async (req, res) => {
 router.patch('/:id/activate', authRequired, adminOnly, async (req, res) => {
   const emp = await db.get(`SELECT user_id FROM employees WHERE id = $1`, [req.params.id]);
   if (!emp) return res.status(404).json({ error: 'Not found' });
-  await db.run(`UPDATE employees SET is_active = 1 WHERE id = $1`, [req.params.id]);
+  await db.run(`UPDATE employees SET is_active = $1 WHERE id = $2`, [true, req.params.id]);
   if (emp.user_id) {
-    await db.run(`UPDATE users SET is_active = 1 WHERE id = $1`, [emp.user_id]);
+    await db.run(`UPDATE users SET is_active = $1 WHERE id = $2`, [true, emp.user_id]);
   }
   res.json({ ok: true });
 });

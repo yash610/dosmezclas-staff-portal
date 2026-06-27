@@ -57,15 +57,15 @@ router.post('/register', async (req, res) => {
 
   const hash = await bcrypt.hash(password, 10);
   await db.run(
-    `INSERT INTO users (email, password_hash, role, is_active) VALUES ($1, $2, $3, 1)`,
-    [email, hash, role],
+    `INSERT INTO users (email, password_hash, role, is_active) VALUES ($1, $2, $3, $4)`,
+    [email, hash, role, true],
   );
   const newUser = await db.get(`SELECT id FROM users WHERE email = $1`, [email]);
 
   // Create employee record for both roles so they appear on the roster
   await db.run(
-    `INSERT INTO employees (user_id, full_name, is_active) VALUES ($1, $2, 1)`,
-    [newUser.id, full_name],
+    `INSERT INTO employees (user_id, full_name, is_active) VALUES ($1, $2, $3)`,
+    [newUser.id, full_name, true],
   );
   const emp = await db.get(`SELECT id FROM employees WHERE user_id = $1`, [newUser.id]);
 
