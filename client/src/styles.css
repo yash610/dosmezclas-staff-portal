@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-charcoal text-cream font-sans antialiased;
+    background-image:
+      radial-gradient(circle at 20% -10%, rgba(230, 126, 34, 0.12), transparent 40%),
+      radial-gradient(circle at 90% 0%, rgba(192, 57, 43, 0.10), transparent 35%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3, h4 { @apply font-display tracking-tight; }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 font-semibold transition shadow-warm;
+  }
+  .btn-primary { @apply btn bg-accent-red text-cream hover:bg-accent-orange; }
+  .btn-secondary { @apply btn bg-cream text-clay hover:bg-cream-300; }
+  .btn-ghost { @apply btn bg-transparent text-cream border border-cream/30 hover:bg-cream/10; }
+  .btn-success { @apply btn bg-accent-green text-cream hover:opacity-90; }
+  .btn-danger  { @apply btn bg-accent-red text-cream hover:opacity-90; }
+
+  .card {
+    @apply rounded-3xl bg-cream text-clay shadow-warm p-5;
+  }
+  .card-dark {
+    @apply rounded-3xl bg-charcoal-700 text-cream shadow-warm p-5 border border-white/5;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-clay/20 bg-cream-200 px-4 py-2.5 text-clay
+           placeholder:text-clay/50 focus:outline-none focus:ring-2 focus:ring-accent-orange;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold;
+  }
+  .badge-red    { @apply badge bg-accent-red/15 text-accent-red; }
+  .badge-orange { @apply badge bg-accent-orange/15 text-accent-orange; }
+  .badge-yellow { @apply badge bg-accent-yellow/20 text-accent-yellow; }
+  .badge-green  { @apply badge bg-accent-green/15 text-accent-green; }
+  .badge-gray   { @apply badge bg-clay/10 text-clay/70; }
+
+  .nav-link {
+    @apply flex items-center gap-3 rounded-2xl px-4 py-3 text-cream/80 hover:bg-cream/10 hover:text-cream transition;
+  }
+  .nav-link.active {
+    @apply bg-accent-red text-cream shadow-warm;
+  }
+
+  .section-title {
+    @apply text-3xl md:text-4xl font-display font-bold text-cream;
+  }
+  .section-sub {
+    @apply text-cream/70 mt-1;
+  }
+}
