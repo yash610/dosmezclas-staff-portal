@@ -8,6 +8,7 @@ const isPg = db.client === 'pg';
 
 const pkAuto = isPg ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
 const bool = isPg ? 'BOOLEAN' : 'INTEGER';
+const boolTrue  = isPg ? 'TRUE' : '1';
 const now = isPg ? 'CURRENT_TIMESTAMP' : "(datetime('now'))";
 
 const statements = [
@@ -21,7 +22,7 @@ const statements = [
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('admin','employee')),
-    is_active ${bool} NOT NULL DEFAULT 1,
+    is_active ${bool} NOT NULL DEFAULT ${boolTrue},
     created_at TIMESTAMP DEFAULT ${now}
   )`,
 
@@ -33,7 +34,7 @@ const statements = [
     role_id INTEGER REFERENCES roles(id),
     hourly_rate REAL DEFAULT 0,
     hire_date TEXT,
-    is_active ${bool} NOT NULL DEFAULT 1,
+    is_active ${bool} NOT NULL DEFAULT ${boolTrue},
     notes TEXT
   )`,
 
@@ -58,7 +59,7 @@ const statements = [
     employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     week_start TEXT NOT NULL,
     day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
-    available ${bool} NOT NULL DEFAULT 1,
+    available ${bool} NOT NULL DEFAULT ${boolTrue},
     start_time TEXT,
     end_time TEXT,
     notes TEXT,
