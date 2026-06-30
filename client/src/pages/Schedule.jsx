@@ -4,10 +4,11 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { addDays, isoDate, mondayOf, weekDays, fmtTime, hoursBetween } from '../lib/dates.js';
 import Badge from '../components/Badge.jsx';
 import Modal from '../components/Modal.jsx';
+import { POSITIONS } from '../lib/positions.js';
 
 const blankShift = {
   employee_id: '', shift_date: '', start_time: '17:00', end_time: '22:00',
-  break_minutes: 30, position: '', notes: '',
+  break_hours: 0, break_mins: 30, position: '', notes: '',
 };
 
 export default function Schedule() {
@@ -18,6 +19,7 @@ export default function Schedule() {
   const [employees, setEmployees] = useState([]);
   const [editing, setEditing] = useState(null); // shift object | 'new' | null
   const [form, setForm] = useState(blankShift);
+  const [shiftErr, setShiftErr] = useState('');
 
   function load() {
     api.get(`/api/schedules?week=${weekStart}`).then(setData);
@@ -39,22 +41,33 @@ export default function Schedule() {
 
   function startNew(dateIso) {
     setForm({ ...blankShift, shift_date: dateIso || days[0].iso, employee_id: employees[0]?.id || '' });
-    setEditing('new');
+    setEditing('new'); setShiftErr('');
   }
   function startEdit(s) {
+    const bm = s.break_minutes || 0;
     setForm({
       employee_id: s.employee_id, shift_date: s.shift_date,
-      start_time: s.start_time, end_time: s.end_time,
-      break_minutes: s.break_minutes || 0,
+      start_time: s.start_time?.slice(0,5) || '', end_time: s.end_time?.slice(0,5) || '',
+      break_hours: Math.floor(bm / 60), break_mins: bm % 60,
       position: s.position || '', notes: s.notes || '',
     });
-    setEditing(s);
+    setEditing(s); setShiftErr('');
   }
   async function save() {
+    setShiftErr('');
+    if (form.break_mins > 59) { setShiftErr('Break minutes cannot exceed 59.'); return; }
+    if (form.break_hours > 12) { setShiftErr('Break hours cannot exceed 12.'); return; }
+    const [sh, sm] = (form.start_time || '').split(':').map(Number);
+    const [eh, em] = (form.end_time || '').split(':').map(Number);
+    const shiftMins = (eh * 60 + em) - (sh * 60 + sm);
+    if (shiftMins <= 0) { setShiftErr('End time must be after start time.'); return; }
+    if (shiftMins > 12 * 60) { setShiftErr('Shift cannot exceed 12 hours.'); return; }
+    const payload = { ...form, break_minutes: form.break_hours * 60 + form.break_mins };
+    delete payload.break_hours; delete payload.break_mins;
     if (editing === 'new') {
-      await api.post('/api/schedules', form);
+      await api.post('/api/schedules', payload);
     } else {
-      await api.patch(`/api/schedules/${editing.id}`, form);
+      await api.patch(`/api/schedules/${editing.id}`, payload);
     }
     setEditing(null); load();
   }
@@ -136,6 +149,7 @@ export default function Schedule() {
           <button className="btn-primary" onClick={save}>Save</button>
         </>}
       >
+        {shiftErr && <div className="text-accent-red text-sm mb-3">{shiftErr}</div>}
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className="text-clay/70 text-sm font-medium block mb-1">Employee</label>
@@ -150,7 +164,10 @@ export default function Schedule() {
           </div>
           <div>
             <label className="text-clay/70 text-sm font-medium block mb-1">Position</label>
-            <input className="input" placeholder="Floor — Dinner" value={form.position} onChange={(e) => setForm({...form, position: e.target.value})} />
+            <select className="input" value={form.position} onChange={(e) => setForm({...form, position: e.target.value})}>
+              <option value="">— Select position —</option>
+              {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
           </div>
           <div>
             <label className="text-clay/70 text-sm font-medium block mb-1">Start</label>
@@ -161,8 +178,14 @@ export default function Schedule() {
             <input type="time" className="input" value={form.end_time} onChange={(e) => setForm({...form, end_time: e.target.value})} />
           </div>
           <div>
-            <label className="text-clay/70 text-sm font-medium block mb-1">Break (min)</label>
-            <input type="number" min="0" className="input" value={form.break_minutes} onChange={(e) => setForm({...form, break_minutes: Number(e.target.value)})} />
+            <label className="text-clay/70 text-sm font-medium block mb-1">Break hours (max 12)</label>
+            <input type="number" min="0" max="12" className="input" value={form.break_hours}
+              onChange={(e) => setForm({...form, break_hours: Math.max(0, Math.min(12, Number(e.target.value)))})} />
+          </div>
+          <div>
+            <label className="text-clay/70 text-sm font-medium block mb-1">Break minutes (max 59)</label>
+            <input type="number" min="0" max="59" className="input" value={form.break_mins}
+              onChange={(e) => setForm({...form, break_mins: Math.max(0, Math.min(59, Number(e.target.value)))})} />
           </div>
           <div className="col-span-2">
             <label className="text-clay/70 text-sm font-medium block mb-1">Notes</label>

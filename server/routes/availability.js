@@ -62,7 +62,7 @@ router.post('/', authRequired, async (req, res) => {
     await db.run(
       `INSERT INTO availability (employee_id, week_start, day_of_week, available, start_time, end_time, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [req.user.employeeId, ws, day_of_week, available ? 1 : 0, start_time || null, end_time || null, notes || null],
+      [req.user.employeeId, ws, day_of_week, !!available, start_time || null, end_time || null, notes || null],
     );
   }
   res.json({ ok: true, week_start: ws });

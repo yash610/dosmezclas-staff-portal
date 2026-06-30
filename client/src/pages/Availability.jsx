@@ -20,8 +20,9 @@ export default function Availability() {
       if (res.days && res.days.length) {
         const next = DAY_NAMES.map((_, i) => {
           const row = res.days.find((d) => d.day_of_week === i);
+          const toHHMM = (t) => t ? t.slice(0, 5) : null;
           return row
-            ? { day_of_week: i, available: !!row.available, start_time: row.start_time || '11:00', end_time: row.end_time || '22:00', notes: row.notes || '' }
+            ? { day_of_week: i, available: !!row.available, start_time: toHHMM(row.start_time) || '11:00', end_time: toHHMM(row.end_time) || '22:00', notes: row.notes || '' }
             : { day_of_week: i, available: false, start_time: '11:00', end_time: '22:00', notes: '' };
         });
         setDays(next);

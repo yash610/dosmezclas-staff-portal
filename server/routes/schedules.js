@@ -112,6 +112,11 @@ router.patch('/:id', authRequired, adminOnly, async (req, res) => {
 
 // DELETE /api/schedules/:id
 router.delete('/:id', authRequired, adminOnly, async (req, res) => {
+  // Mark any approved requests for this shift as rejected so employees see the change
+  await db.run(
+    `UPDATE shift_requests SET status = 'rejected' WHERE schedule_id = $1 AND status = 'approved'`,
+    [req.params.id],
+  );
   await db.run(`DELETE FROM schedules WHERE id = $1`, [req.params.id]);
   res.json({ ok: true });
 });

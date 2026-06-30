@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import Badge from '../components/Badge.jsx';
 import Modal from '../components/Modal.jsx';
 import { fmtTime, isoDate, mondayOf } from '../lib/dates.js';
+import { POSITIONS } from '../lib/positions.js';
 
 const blankExtra = { type: 'extra', shift_date: '', start_time: '17:00', end_time: '22:00', position: '', reason: '' };
 
@@ -137,7 +138,10 @@ export default function Requests() {
             </div>
             <div className="col-span-2">
               <label className="text-clay/70 text-sm font-medium block mb-1">Position</label>
-              <input className="input" value={form.position} onChange={(e) => setForm({...form, position: e.target.value})} />
+              <select className="input" value={form.position} onChange={(e) => setForm({...form, position: e.target.value})}>
+                <option value="">— Select position —</option>
+                {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
             </div>
             <div className="col-span-2">
               <label className="text-clay/70 text-sm font-medium block mb-1">Reason</label>

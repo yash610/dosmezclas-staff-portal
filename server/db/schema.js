@@ -93,9 +93,17 @@ const statements = [
   )`,
 ];
 
+const defaultRoles = ['Waiter', 'Bartender', 'Manager', 'Chipper', 'Cook', 'Dishwasher'];
+
 async function migrate() {
   for (const sql of statements) {
     await db.exec(sql);
+  }
+  // Seed default roles if not present
+  for (const name of defaultRoles) {
+    try {
+      await db.run(`INSERT INTO roles (name) SELECT $1 WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = $1)`, [name]);
+    } catch (_) {}
   }
 }
 
