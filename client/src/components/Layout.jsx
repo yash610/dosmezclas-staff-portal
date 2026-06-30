@@ -3,11 +3,12 @@ import { useAuth } from '../context/AuthContext.jsx';
 import Brand from './Brand.jsx';
 
 const adminLinks = [
-  { to: '/admin',     label: 'Dashboard',   icon: '🏠' },
-  { to: '/schedule',  label: 'Schedule',    icon: '🗓️' },
-  { to: '/employees', label: 'Employees',   icon: '👥' },
-  { to: '/requests',  label: 'Requests',    icon: '🔁' },
-  { to: '/reports',   label: 'Reports',     icon: '📊' },
+  { to: '/admin',        label: 'Dashboard',    icon: '🏠' },
+  { to: '/schedule',     label: 'Schedule',     icon: '🗓️' },
+  { to: '/availability', label: 'Availability', icon: '✅' },
+  { to: '/employees',    label: 'Employees',    icon: '👥' },
+  { to: '/requests',     label: 'Requests',     icon: '🔁' },
+  { to: '/reports',      label: 'Reports',      icon: '📊' },
 ];
 
 const employeeLinks = [

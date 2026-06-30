@@ -31,6 +31,20 @@ router.get('/me', authRequired, async (req, res) => {
   res.json({ week_start, days: rows });
 });
 
+// Admin: all employees' availability for a given week
+router.get('/all', authRequired, adminOnly, async (req, res) => {
+  const week_start = mondayOf(req.query.week_start || new Date().toISOString().slice(0, 10));
+  const rows = await db.query(
+    `SELECT a.*, e.full_name, e.id AS emp_id
+       FROM availability a
+       JOIN employees e ON e.id = a.employee_id
+      WHERE a.week_start = $1
+      ORDER BY e.full_name, a.day_of_week`,
+    [week_start],
+  );
+  res.json({ week_start, rows });
+});
+
 // Admin: any employee's availability
 router.get('/:employeeId', authRequired, adminOnly, async (req, res) => {
   const week_start = req.query.week_start || mondayOf(req.query.week);

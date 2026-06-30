@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import { addDays, isoDate, mondayOf, DAY_NAMES } from '../lib/dates.js';
 
 function nextMondayIso() {
@@ -8,7 +9,123 @@ function nextMondayIso() {
   return isoDate(addDays(today, offset));
 }
 
-export default function Availability() {
+function toHHMM(t) { return t ? t.slice(0, 5) : null; }
+
+// ─── Admin view ───────────────────────────────────────────────────────────────
+function AdminAvailability() {
+  const [weekStart, setWeekStart] = useState(nextMondayIso());
+  const [grid, setGrid] = useState({});
+  const [employees, setEmployees] = useState([]);
+
+  function shiftWeek(delta) {
+    const d = new Date(weekStart + 'T00:00:00');
+    d.setDate(d.getDate() + delta * 7);
+    setWeekStart(isoDate(d));
+  }
+
+  useEffect(() => {
+    api.get('/api/employees').then(setEmployees);
+  }, []);
+
+  useEffect(() => {
+    if (!employees.length) return;
+    api.get(`/api/availability/all?week_start=${weekStart}`).then(({ rows }) => {
+      const map = {};
+      for (const emp of employees) {
+        map[emp.id] = { full_name: emp.full_name, days: {} };
+      }
+      for (const r of rows || []) {
+        if (!map[r.emp_id]) map[r.emp_id] = { full_name: r.full_name, days: {} };
+        map[r.emp_id].days[r.day_of_week] = r;
+      }
+      setGrid(map);
+    });
+  }, [weekStart, employees]);
+
+  const weekDates = DAY_NAMES.map((_, i) => {
+    const d = new Date(weekStart + 'T00:00:00');
+    d.setDate(d.getDate() + i);
+    return d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
+  });
+
+  const empList = employees.filter((e) => e.is_active);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="section-title">Staff availability</h1>
+          <p className="section-sub">See who's available each day for the selected week.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="btn-ghost" onClick={() => shiftWeek(-1)}>← Prev</button>
+          <input type="date" className="input" value={weekStart} onChange={(e) => setWeekStart(e.target.value)} />
+          <button className="btn-ghost" onClick={() => shiftWeek(1)}>Next →</button>
+        </div>
+      </div>
+
+      <div className="card overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-left border-b border-clay/10">
+              <th className="py-3 px-3 text-clay/60 font-medium min-w-[140px]">Employee</th>
+              {DAY_NAMES.map((name, i) => (
+                <th key={i} className="py-3 px-3 text-clay/60 font-medium text-center min-w-[100px]">
+                  <div>{name}</div>
+                  <div className="text-xs font-normal text-clay/40">{weekDates[i]}</div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {empList.length === 0 && (
+              <tr><td colSpan={8} className="py-10 text-center text-clay/60">No active employees.</td></tr>
+            )}
+            {empList.map((emp) => {
+              const empData = grid[emp.id] || { days: {} };
+              return (
+                <tr key={emp.id} className="border-b border-clay/5 last:border-0">
+                  <td className="py-3 px-3 font-semibold text-clay">{emp.full_name}</td>
+                  {DAY_NAMES.map((_, i) => {
+                    const day = empData.days[i];
+                    if (!day) {
+                      return (
+                        <td key={i} className="py-3 px-3 text-center">
+                          <span className="text-clay/30 text-xs italic">Not set</span>
+                        </td>
+                      );
+                    }
+                    const avail = day.available === true || day.available === 1;
+                    return (
+                      <td key={i} className="py-3 px-3 text-center">
+                        {avail ? (
+                          <div>
+                            <span className="inline-block px-2 py-0.5 rounded-full bg-accent-green/20 text-accent-green text-xs font-semibold">✓ Available</span>
+                            {day.start_time && day.end_time && (
+                              <div className="text-clay/60 text-xs mt-1">
+                                {toHHMM(day.start_time)} – {toHHMM(day.end_time)}
+                              </div>
+                            )}
+                            {day.notes && <div className="text-clay/40 text-xs mt-0.5 italic">{day.notes}</div>}
+                          </div>
+                        ) : (
+                          <span className="inline-block px-2 py-0.5 rounded-full bg-accent-red/15 text-accent-red text-xs font-semibold">✗ Off</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Employee view ────────────────────────────────────────────────────────────
+function EmployeeAvailability() {
   const [weekStart, setWeekStart] = useState(nextMondayIso());
   const [days, setDays] = useState(() => DAY_NAMES.map((_, i) => ({
     day_of_week: i, available: true, start_time: '11:00', end_time: '22:00', notes: '',
@@ -20,12 +137,13 @@ export default function Availability() {
       if (res.days && res.days.length) {
         const next = DAY_NAMES.map((_, i) => {
           const row = res.days.find((d) => d.day_of_week === i);
-          const toHHMM = (t) => t ? t.slice(0, 5) : null;
           return row
             ? { day_of_week: i, available: !!row.available, start_time: toHHMM(row.start_time) || '11:00', end_time: toHHMM(row.end_time) || '22:00', notes: row.notes || '' }
             : { day_of_week: i, available: false, start_time: '11:00', end_time: '22:00', notes: '' };
         });
         setDays(next);
+      } else {
+        setDays(DAY_NAMES.map((_, i) => ({ day_of_week: i, available: true, start_time: '11:00', end_time: '22:00', notes: '' })));
       }
     });
   }, [weekStart]);
@@ -90,4 +208,10 @@ export default function Availability() {
       </div>
     </div>
   );
+}
+
+// ─── Root export ──────────────────────────────────────────────────────────────
+export default function Availability() {
+  const { user } = useAuth();
+  return user?.role === 'admin' ? <AdminAvailability /> : <EmployeeAvailability />;
 }
