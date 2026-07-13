@@ -11,3 +11,6 @@ build/
 .vscode/
 .idea/
 coverage/
+
+# Catering site lives in its own separate repo (dosmezclas_catering)
+catering-site/
