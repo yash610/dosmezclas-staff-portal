@@ -16,8 +16,13 @@ export default function EmployeeDashboard() {
     api.get(`/api/schedules/me/week?week=${isoDate(mondayOf())}`).then(setWeek);
   }, []);
 
-  const weekHours = (week?.shifts || []).reduce((a, s) => a + hoursBetween(s.start_time, s.end_time, s.break_minutes), 0);
+  // Shifts still awaiting the employee's own approval (assigned on a day
+  // they marked off) don't count as committed hours yet.
+  const weekHours = (week?.shifts || [])
+    .filter((s) => s.employee_approval !== 'pending')
+    .reduce((a, s) => a + hoursBetween(s.start_time, s.end_time, s.break_minutes), 0);
   const upcoming = (week?.shifts || []).filter((s) => s.shift_date >= isoDate());
+  const pendingCount = (week?.shifts || []).filter((s) => s.employee_approval === 'pending').length;
 
   return (
     <div className="space-y-6">
@@ -25,6 +30,12 @@ export default function EmployeeDashboard() {
         <h1 className="section-title">Hola, {(user?.fullName || 'team').split(' ')[0]} 👋</h1>
         <p className="section-sub">Welcome back to the Dos Mezclas staff portal.</p>
       </div>
+
+      {pendingCount > 0 && (
+        <Link to="/schedule" className="block rounded-2xl border-2 border-dashed border-accent-orange/50 bg-accent-orange/10 px-4 py-3 text-sm text-accent-orange font-semibold hover:bg-accent-orange/15">
+          You have {pendingCount} shift{pendingCount > 1 ? 's' : ''} awaiting your approval — tap to review →
+        </Link>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <StatCard label="Today" value={today?.shifts?.length ? today.shifts.length : 'Off'} hint={today?.shifts?.length ? 'shift(s)' : 'enjoy the day'} icon="🌶️" accent="orange" />
@@ -44,12 +55,16 @@ export default function EmployeeDashboard() {
         ) : (
           <div className="space-y-3">
             {today.shifts.map((s) => (
-              <div key={s.id} className="bg-cream-200 rounded-2xl p-4 flex items-center justify-between">
+              <div key={s.id} className={`rounded-2xl p-4 flex items-center justify-between ${s.employee_approval === 'pending' ? 'border-2 border-dashed border-accent-orange/50 bg-cream-200/60' : 'bg-cream-200'}`}>
                 <div>
                   <div className="font-display text-2xl text-clay">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</div>
                   <div className="text-clay/60 text-sm mt-1">{s.position || 'Floor'} · {s.break_minutes}m break</div>
                 </div>
-                <Badge status={s.status} />
+                {s.employee_approval === 'pending' ? (
+                  <span className="badge-yellow">Needs your OK</span>
+                ) : (
+                  <Badge status={s.status} />
+                )}
               </div>
             ))}
           </div>
@@ -70,7 +85,10 @@ export default function EmployeeDashboard() {
                   </div>
                   <div className="text-clay/60 text-sm">{s.position || '—'}</div>
                 </div>
-                <div className="font-semibold text-clay">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</div>
+                <div className="text-right">
+                  <div className="font-semibold text-clay">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</div>
+                  {s.employee_approval === 'pending' && <div className="text-[10px] text-accent-orange font-semibold uppercase tracking-wide">Needs your OK</div>}
+                </div>
               </li>
             ))}
           </ul>

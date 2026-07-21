@@ -49,6 +49,7 @@ const statements = [
     position TEXT,
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled','completed','cancelled','swapped')),
+    employee_approval TEXT,
     created_at TIMESTAMP DEFAULT ${now}
   )`,
 
@@ -122,6 +123,10 @@ async function migrate() {
   await addColumnIfMissing('availability', `status TEXT NOT NULL DEFAULT 'pending'`);
   await addColumnIfMissing('availability', 'schedule_id INTEGER');
   await addColumnIfMissing('schedules', 'shift_type TEXT');
+  // Lets an admin assign a shift to an employee who marked themselves off —
+  // the shift sits in this column as 'pending' until the employee approves
+  // or rejects it themselves.
+  await addColumnIfMissing('schedules', 'employee_approval TEXT');
 
   // Seed default roles if not present
   for (const name of defaultRoles) {

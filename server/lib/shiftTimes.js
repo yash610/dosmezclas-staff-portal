@@ -44,6 +44,22 @@ function weekdayLabelFromAvailabilityIndex(dayOfWeek) {
   return AVAILABILITY_DOW_LABELS[dayOfWeek];
 }
 
+// Monday (ISO date) of the week containing the given ISO date.
+function mondayOfIso(iso) {
+  const d = new Date(iso + 'T00:00:00Z');
+  const day = d.getUTCDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+// Converts an ISO date to the availability table's day_of_week index
+// (0=Mon..6=Sun), the inverse of weekdayLabelFromAvailabilityIndex.
+function availabilityDowFromIso(iso) {
+  const jsDow = new Date(iso + 'T00:00:00Z').getUTCDay(); // 0=Sun..6=Sat
+  return jsDow === 0 ? 6 : jsDow - 1;
+}
+
 module.exports = {
   LUNCH,
   SHIFT_TYPES,
@@ -51,4 +67,6 @@ module.exports = {
   computeShiftTimes,
   weekdayLabelFromIso,
   weekdayLabelFromAvailabilityIndex,
+  mondayOfIso,
+  availabilityDowFromIso,
 };

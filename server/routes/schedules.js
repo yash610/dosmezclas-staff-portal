@@ -1,7 +1,13 @@
 const express = require('express');
 const db = require('../db');
 const { authRequired, adminOnly } = require('../middleware/auth');
-const { SHIFT_TYPES, computeShiftTimes, weekdayLabelFromIso } = require('../lib/shiftTimes');
+const {
+  SHIFT_TYPES,
+  computeShiftTimes,
+  weekdayLabelFromIso,
+  mondayOfIso,
+  availabilityDowFromIso,
+} = require('../lib/shiftTimes');
 
 const router = express.Router();
 
@@ -17,6 +23,20 @@ function addDaysIso(iso, n) {
   const d = new Date(iso + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
+}
+
+// True only when the employee explicitly submitted "off" (available=false)
+// for the week+day containing shiftDateIso. An employee who never submitted
+// availability at all is NOT considered off — admins can assign them freely
+// and the shift goes straight to 'scheduled' with no approval gate.
+async function isMarkedOff(employeeId, shiftDateIso) {
+  const weekStart = mondayOfIso(shiftDateIso);
+  const dow = availabilityDowFromIso(shiftDateIso);
+  const row = await db.get(
+    `SELECT available FROM availability WHERE employee_id=$1 AND week_start=$2 AND day_of_week=$3`,
+    [employeeId, weekStart, dow],
+  );
+  return !!row && !row.available;
 }
 
 // GET /api/schedules?week=YYYY-MM-DD  (admin: everyone; employee: self)
@@ -76,17 +96,21 @@ router.get('/me/week', authRequired, async (req, res) => {
 // POST /api/schedules   (admin: create shift)
 // Body: { employee_id, shift_date, shift_type: 'lunch'|'dinner'|'both', break_minutes, position, notes }
 // Start/end times are derived from shift_type + the shift_date's weekday —
-// admins pick a shift type, not manual clock times.
+// admins pick a shift type, not manual clock times. If the employee marked
+// themselves off that day, the shift is created but flagged as needing the
+// employee's own approval before it counts as a real assignment.
 router.post('/', authRequired, adminOnly, async (req, res) => {
   const { employee_id, shift_date, shift_type, break_minutes, position, notes } = req.body || {};
   if (!employee_id || !shift_date || !SHIFT_TYPES.includes(shift_type)) {
     return res.status(400).json({ error: 'employee_id, shift_date, and a valid shift_type (lunch/dinner/both) are required' });
   }
   const { start_time, end_time } = computeShiftTimes(weekdayLabelFromIso(shift_date), shift_type);
+  const employeeApproval = (await isMarkedOff(employee_id, shift_date)) ? 'pending' : null;
+
   const result = await db.run(
-    `INSERT INTO schedules (employee_id, shift_date, shift_type, start_time, end_time, break_minutes, position, notes, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'scheduled')`,
-    [employee_id, shift_date, shift_type, start_time, end_time, break_minutes ?? 30, position || null, notes || null],
+    `INSERT INTO schedules (employee_id, shift_date, shift_type, start_time, end_time, break_minutes, position, notes, status, employee_approval)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'scheduled', $9)`,
+    [employee_id, shift_date, shift_type, start_time, end_time, break_minutes ?? 30, position || null, notes || null, employeeApproval],
   );
   const id = db.client === 'pg'
     ? (await db.get(`SELECT id FROM schedules WHERE employee_id=$1 AND shift_date=$2 AND start_time=$3 ORDER BY id DESC LIMIT 1`, [employee_id, shift_date, start_time])).id
@@ -101,14 +125,24 @@ router.patch('/:id', authRequired, adminOnly, async (req, res) => {
 
   let start_time = null;
   let end_time = null;
-  if (shift_date || shift_type) {
+  let employeeApproval; // undefined = leave whatever is already stored alone
+
+  if (shift_date || shift_type || employee_id) {
     const current = await db.get(`SELECT * FROM schedules WHERE id = $1`, [req.params.id]);
     if (!current) return res.status(404).json({ error: 'Not found' });
     const effectiveDate = shift_date || current.shift_date;
     const effectiveType = shift_type || current.shift_type;
+    const effectiveEmployee = employee_id || current.employee_id;
     const computed = computeShiftTimes(weekdayLabelFromIso(effectiveDate), effectiveType);
     start_time = computed.start_time;
     end_time = computed.end_time;
+
+    // Only re-check the off-day approval gate if the employee or the date
+    // actually changed — those are the only two things that can change
+    // whether this employee is marked off for this shift.
+    if (employee_id || shift_date) {
+      employeeApproval = (await isMarkedOff(effectiveEmployee, effectiveDate)) ? 'pending' : null;
+    }
   }
 
   await db.run(
@@ -125,6 +159,40 @@ router.patch('/:id', authRequired, adminOnly, async (req, res) => {
       WHERE id = $10`,
     [shift_date, shift_type, start_time, end_time, break_minutes, position, notes, status, employee_id, req.params.id],
   );
+
+  // Applied as its own statement (not folded into the COALESCE update above)
+  // because we sometimes need to explicitly clear this back to NULL, which
+  // COALESCE can't distinguish from "leave it alone".
+  if (employeeApproval !== undefined) {
+    await db.run(`UPDATE schedules SET employee_approval = $1 WHERE id = $2`, [employeeApproval, req.params.id]);
+  }
+
+  const updated = await db.get(`SELECT * FROM schedules WHERE id = $1`, [req.params.id]);
+  res.json(updated);
+});
+
+// PATCH /api/schedules/:id/employee-approval
+// The employee's own response to a shift assigned on a day they marked off.
+router.patch('/:id/employee-approval', authRequired, async (req, res) => {
+  if (!req.user.employeeId) return res.status(403).json({ error: 'Employees only' });
+  const { decision } = req.body || {};
+  if (!['approved', 'rejected'].includes(decision)) {
+    return res.status(400).json({ error: "decision must be 'approved' or 'rejected'" });
+  }
+
+  const row = await db.get(`SELECT * FROM schedules WHERE id = $1`, [req.params.id]);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  if (row.employee_id !== req.user.employeeId) return res.status(403).json({ error: 'Not your shift' });
+  if (row.employee_approval !== 'pending') {
+    return res.status(400).json({ error: 'This shift is not awaiting your approval' });
+  }
+
+  if (decision === 'rejected') {
+    await db.run(`DELETE FROM schedules WHERE id = $1`, [req.params.id]);
+    return res.json({ ok: true, deleted: true });
+  }
+
+  await db.run(`UPDATE schedules SET employee_approval = 'approved' WHERE id = $1`, [req.params.id]);
   const updated = await db.get(`SELECT * FROM schedules WHERE id = $1`, [req.params.id]);
   res.json(updated);
 });

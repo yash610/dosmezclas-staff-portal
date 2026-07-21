@@ -25,6 +25,7 @@ export default function Schedule() {
   const [editing, setEditing] = useState(null); // shift object | 'new' | null
   const [form, setForm] = useState(blankShift);
   const [shiftErr, setShiftErr] = useState('');
+  const [busyId, setBusyId] = useState(null);
 
   function load() {
     api.get(`/api/schedules?week=${weekStart}`).then(setData);
@@ -78,6 +79,16 @@ export default function Schedule() {
     setEditing(null); load();
   }
 
+  async function respond(shiftId, decision) {
+    setBusyId(shiftId);
+    try {
+      await api.patch(`/api/schedules/${shiftId}/employee-approval`, { decision });
+      load();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function dayLabelFor(iso) {
     const d = days.find((x) => x.iso === iso);
     return d ? d.label : '';
@@ -109,31 +120,61 @@ export default function Schedule() {
               <div className="text-cream/40 text-xs">{d.month}</div>
             </div>
             <div className="space-y-2">
-              {(grouped[d.iso] || []).map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => isAdmin && startEdit(s)}
-                  className={`block w-full text-left rounded-2xl p-3 transition
-                    ${isAdmin ? 'hover:scale-[1.01]' : 'cursor-default'}
-                    bg-cream text-clay shadow-warm`}
-                >
-                  <div className="flex justify-between items-start gap-2">
-                    <div>
-                      <div className="font-semibold text-sm">{s.full_name}</div>
-                      <div className="text-clay/60 text-xs">{s.position || s.role_name || '—'}</div>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-orange/20 text-accent-orange font-semibold whitespace-nowrap">
-                      {hoursBetween(s.start_time, s.end_time, s.break_minutes).toFixed(1)}h
-                    </span>
+              {(grouped[d.iso] || []).map((s) => {
+                const pending = s.employee_approval === 'pending';
+                return (
+                  <div
+                    key={s.id}
+                    className={`rounded-2xl transition ${pending ? 'border-2 border-dashed border-accent-orange/50 bg-cream/60' : 'bg-cream shadow-warm'}`}
+                  >
+                    <button
+                      onClick={() => isAdmin && startEdit(s)}
+                      className={`block w-full text-left p-3 ${isAdmin ? 'hover:scale-[1.01]' : 'cursor-default'} ${pending ? 'text-clay/60' : 'text-clay'}`}
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <div className="font-semibold text-sm">{s.full_name}</div>
+                          <div className="text-clay/60 text-xs">{s.position || s.role_name || '—'}</div>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-orange/20 text-accent-orange font-semibold whitespace-nowrap">
+                          {hoursBetween(s.start_time, s.end_time, s.break_minutes).toFixed(1)}h
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-clay/10 text-clay/70 font-semibold">
+                          {SHIFT_TYPE_LABEL[s.shift_type] || 'Shift'}
+                        </span>
+                        <span className="text-xs font-semibold">{shiftTimeLabel(s.shift_type, d.label) || `${s.start_time?.slice(0,5)} – ${s.end_time?.slice(0,5)}`}</span>
+                      </div>
+                    </button>
+                    {pending && (
+                      <div className="px-3 pb-3">
+                        {isAdmin ? (
+                          <div className="text-[10px] text-accent-orange font-semibold uppercase tracking-wide border-t border-clay/10 pt-2">
+                            Awaiting employee approval
+                          </div>
+                        ) : (
+                          <div className="border-t border-clay/10 pt-2 space-y-1.5">
+                            <div className="text-xs text-accent-orange font-semibold">Manager assigned you this shift on a day you're off.</div>
+                            <div className="flex gap-1.5">
+                              <button
+                                disabled={busyId === s.id}
+                                onClick={() => respond(s.id, 'approved')}
+                                className="text-xs px-2 py-1 rounded-full bg-accent-green/15 text-accent-green font-semibold hover:bg-accent-green/25 disabled:opacity-50"
+                              >Approve</button>
+                              <button
+                                disabled={busyId === s.id}
+                                onClick={() => respond(s.id, 'rejected')}
+                                className="text-xs px-2 py-1 rounded-full bg-accent-red/15 text-accent-red font-semibold hover:bg-accent-red/25 disabled:opacity-50"
+                              >Reject</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-1 flex items-center gap-1.5">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-clay/10 text-clay/70 font-semibold">
-                      {SHIFT_TYPE_LABEL[s.shift_type] || 'Shift'}
-                    </span>
-                    <span className="text-xs font-semibold">{shiftTimeLabel(s.shift_type, d.label) || `${s.start_time?.slice(0,5)} – ${s.end_time?.slice(0,5)}`}</span>
-                  </div>
-                </button>
-              ))}
+                );
+              })}
               {isAdmin && (
                 <button
                   onClick={() => startNew(d.iso)}
@@ -161,6 +202,11 @@ export default function Schedule() {
         </>}
       >
         {shiftErr && <div className="text-accent-red text-sm mb-3">{shiftErr}</div>}
+        {editing && editing !== 'new' && editing.employee_approval === 'pending' && (
+          <div className="text-xs text-accent-orange bg-accent-orange/10 rounded-xl px-3 py-2 mb-3">
+            This shift is still awaiting the employee's approval — they marked themselves off that day.
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className="text-clay/70 text-sm font-medium block mb-1">Employee</label>
