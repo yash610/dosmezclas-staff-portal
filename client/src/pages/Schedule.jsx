@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { addDays, isoDate, mondayOf, weekDays, fmtTime, hoursBetween } from '../lib/dates.js';
-import Badge from '../components/Badge.jsx';
+import { addDays, isoDate, mondayOf, weekDays, hoursBetween, shiftTimeLabel, SHIFT_TYPE_LABEL } from '../lib/dates.js';
 import Modal from '../components/Modal.jsx';
 import { POSITIONS } from '../lib/positions.js';
 
+const SHIFT_TYPES = [
+  { value: 'lunch', label: 'Lunch' },
+  { value: 'dinner', label: 'Dinner' },
+  { value: 'both', label: 'Both' },
+];
+
 const blankShift = {
-  employee_id: '', shift_date: '', start_time: '17:00', end_time: '22:00',
+  employee_id: '', shift_date: '', shift_type: 'dinner',
   break_hours: 0, break_mins: 30, position: '', notes: '',
 };
 
@@ -47,7 +52,7 @@ export default function Schedule() {
     const bm = s.break_minutes || 0;
     setForm({
       employee_id: s.employee_id, shift_date: s.shift_date,
-      start_time: s.start_time?.slice(0,5) || '', end_time: s.end_time?.slice(0,5) || '',
+      shift_type: s.shift_type || 'dinner',
       break_hours: Math.floor(bm / 60), break_mins: bm % 60,
       position: s.position || '', notes: s.notes || '',
     });
@@ -57,11 +62,7 @@ export default function Schedule() {
     setShiftErr('');
     if (form.break_mins > 59) { setShiftErr('Break minutes cannot exceed 59.'); return; }
     if (form.break_hours > 12) { setShiftErr('Break hours cannot exceed 12.'); return; }
-    const [sh, sm] = (form.start_time || '').split(':').map(Number);
-    const [eh, em] = (form.end_time || '').split(':').map(Number);
-    const shiftMins = (eh * 60 + em) - (sh * 60 + sm);
-    if (shiftMins <= 0) { setShiftErr('End time must be after start time.'); return; }
-    if (shiftMins > 12 * 60) { setShiftErr('Shift cannot exceed 12 hours.'); return; }
+    if (!form.employee_id || !form.shift_date || !form.shift_type) { setShiftErr('Employee, date, and shift type are required.'); return; }
     const payload = { ...form, break_minutes: form.break_hours * 60 + form.break_mins };
     delete payload.break_hours; delete payload.break_mins;
     if (editing === 'new') {
@@ -75,6 +76,11 @@ export default function Schedule() {
     if (!confirm('Delete this shift?')) return;
     await api.del(`/api/schedules/${editing.id}`);
     setEditing(null); load();
+  }
+
+  function dayLabelFor(iso) {
+    const d = days.find((x) => x.iso === iso);
+    return d ? d.label : '';
   }
 
   return (
@@ -120,7 +126,12 @@ export default function Schedule() {
                       {hoursBetween(s.start_time, s.end_time, s.break_minutes).toFixed(1)}h
                     </span>
                   </div>
-                  <div className="mt-1 text-sm font-semibold">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</div>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-clay/10 text-clay/70 font-semibold">
+                      {SHIFT_TYPE_LABEL[s.shift_type] || 'Shift'}
+                    </span>
+                    <span className="text-xs font-semibold">{shiftTimeLabel(s.shift_type, d.label) || `${s.start_time?.slice(0,5)} – ${s.end_time?.slice(0,5)}`}</span>
+                  </div>
                 </button>
               ))}
               {isAdmin && (
@@ -169,13 +180,25 @@ export default function Schedule() {
               {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
-          <div>
-            <label className="text-clay/70 text-sm font-medium block mb-1">Start</label>
-            <input type="time" className="input" value={form.start_time} onChange={(e) => setForm({...form, start_time: e.target.value})} />
-          </div>
-          <div>
-            <label className="text-clay/70 text-sm font-medium block mb-1">End</label>
-            <input type="time" className="input" value={form.end_time} onChange={(e) => setForm({...form, end_time: e.target.value})} />
+          <div className="col-span-2">
+            <label className="text-clay/70 text-sm font-medium block mb-1">Shift</label>
+            <div className="flex flex-wrap gap-1.5">
+              {SHIFT_TYPES.map((t) => (
+                <button
+                  key={t.value} type="button"
+                  onClick={() => setForm({ ...form, shift_type: t.value })}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition
+                    ${form.shift_type === t.value ? 'bg-clay text-cream border-clay' : 'border-clay/20 text-clay/60 hover:border-clay/50'}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {form.shift_date && form.shift_type && (
+              <div className="text-clay/50 text-xs mt-1.5">
+                {shiftTimeLabel(form.shift_type, dayLabelFor(form.shift_date) || new Date(form.shift_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' }))}
+              </div>
+            )}
           </div>
           <div>
             <label className="text-clay/70 text-sm font-medium block mb-1">Break hours (max 12)</label>

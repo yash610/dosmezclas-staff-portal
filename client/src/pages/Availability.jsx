@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { addDays, isoDate, mondayOf, DAY_NAMES } from '../lib/dates.js';
+import { addDays, isoDate, DAY_NAMES, shiftTimeLabel, SHIFT_TYPE_LABEL } from '../lib/dates.js';
+import Badge from '../components/Badge.jsx';
 
 function nextMondayIso() {
   const today = new Date();
@@ -9,13 +10,14 @@ function nextMondayIso() {
   return isoDate(addDays(today, offset));
 }
 
-function toHHMM(t) { return t ? t.slice(0, 5) : null; }
+const SHIFT_LABELS = SHIFT_TYPE_LABEL;
 
 // ─── Admin view ───────────────────────────────────────────────────────────────
 function AdminAvailability() {
   const [weekStart, setWeekStart] = useState(nextMondayIso());
   const [grid, setGrid] = useState({});
   const [employees, setEmployees] = useState([]);
+  const [busyId, setBusyId] = useState(null);
 
   function shiftWeek(delta) {
     const d = new Date(weekStart + 'T00:00:00');
@@ -27,7 +29,7 @@ function AdminAvailability() {
     api.get('/api/employees').then(setEmployees);
   }, []);
 
-  useEffect(() => {
+  function load() {
     if (!employees.length) return;
     api.get(`/api/availability/all?week_start=${weekStart}`).then(({ rows }) => {
       const map = {};
@@ -40,7 +42,19 @@ function AdminAvailability() {
       }
       setGrid(map);
     });
-  }, [weekStart, employees]);
+  }
+
+  useEffect(load, [weekStart, employees]);
+
+  async function decide(row, status) {
+    setBusyId(row.id);
+    try {
+      await api.patch(`/api/availability/${row.id}/status`, { status });
+      load();
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   const weekDates = DAY_NAMES.map((_, i) => {
     const d = new Date(weekStart + 'T00:00:00');
@@ -55,7 +69,7 @@ function AdminAvailability() {
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="section-title">Staff availability</h1>
-          <p className="section-sub">See who's available each day for the selected week.</p>
+          <p className="section-sub">Review submitted availability and approve shifts onto the schedule.</p>
         </div>
         <div className="flex items-center gap-2">
           <button className="btn-ghost" onClick={() => shiftWeek(-1)}>← Prev</button>
@@ -70,7 +84,7 @@ function AdminAvailability() {
             <tr className="text-left border-b border-clay/10">
               <th className="py-3 px-3 text-clay/60 font-medium min-w-[140px]">Employee</th>
               {DAY_NAMES.map((name, i) => (
-                <th key={i} className="py-3 px-3 text-clay/60 font-medium text-center min-w-[100px]">
+                <th key={i} className="py-3 px-3 text-clay/60 font-medium text-center min-w-[130px]">
                   <div>{name}</div>
                   <div className="text-xs font-normal text-clay/40">{weekDates[i]}</div>
                 </th>
@@ -85,28 +99,55 @@ function AdminAvailability() {
               const empData = grid[emp.id] || { days: {} };
               return (
                 <tr key={emp.id} className="border-b border-clay/5 last:border-0">
-                  <td className="py-3 px-3 font-semibold text-clay">{emp.full_name}</td>
+                  <td className="py-3 px-3 font-semibold text-clay align-top">{emp.full_name}</td>
                   {DAY_NAMES.map((_, i) => {
                     const day = empData.days[i];
                     if (!day) {
                       return (
-                        <td key={i} className="py-3 px-3 text-center">
+                        <td key={i} className="py-3 px-3 text-center align-top">
                           <span className="text-clay/30 text-xs italic">Not set</span>
                         </td>
                       );
                     }
                     const avail = day.available === true || day.available === 1;
                     return (
-                      <td key={i} className="py-3 px-3 text-center">
+                      <td key={i} className="py-3 px-3 text-center align-top">
                         {avail ? (
-                          <div>
-                            <span className="inline-block px-2 py-0.5 rounded-full bg-accent-green/20 text-accent-green text-xs font-semibold">✓ Available</span>
-                            {day.start_time && day.end_time && (
-                              <div className="text-clay/60 text-xs mt-1">
-                                {toHHMM(day.start_time)} – {toHHMM(day.end_time)}
+                          <div className="space-y-1.5">
+                            <span className="inline-block px-2 py-0.5 rounded-full bg-accent-green/20 text-accent-green text-xs font-semibold">
+                              {SHIFT_LABELS[day.shift_type] || 'Available'}
+                            </span>
+                            <div className="text-clay/60 text-xs">{shiftTimeLabel(day.shift_type, DAY_NAMES[i])}</div>
+                            {day.notes && <div className="text-clay/40 text-xs italic">{day.notes}</div>}
+                            <div><Badge status={day.status} /></div>
+                            {day.status === 'pending' && (
+                              <div className="flex items-center justify-center gap-1.5 pt-1">
+                                <button
+                                  disabled={busyId === day.id}
+                                  onClick={() => decide(day, 'approved')}
+                                  className="text-xs px-2 py-1 rounded-full bg-accent-green/15 text-accent-green font-semibold hover:bg-accent-green/25 disabled:opacity-50"
+                                >Approve</button>
+                                <button
+                                  disabled={busyId === day.id}
+                                  onClick={() => decide(day, 'rejected')}
+                                  className="text-xs px-2 py-1 rounded-full bg-accent-red/15 text-accent-red font-semibold hover:bg-accent-red/25 disabled:opacity-50"
+                                >Reject</button>
                               </div>
                             )}
-                            {day.notes && <div className="text-clay/40 text-xs mt-0.5 italic">{day.notes}</div>}
+                            {day.status === 'approved' && (
+                              <button
+                                disabled={busyId === day.id}
+                                onClick={() => decide(day, 'rejected')}
+                                className="text-xs px-2 py-1 rounded-full border border-clay/20 text-clay/60 hover:border-clay/50 disabled:opacity-50"
+                              >Revoke</button>
+                            )}
+                            {day.status === 'rejected' && (
+                              <button
+                                disabled={busyId === day.id}
+                                onClick={() => decide(day, 'approved')}
+                                className="text-xs px-2 py-1 rounded-full border border-clay/20 text-clay/60 hover:border-clay/50 disabled:opacity-50"
+                              >Approve anyway</button>
+                            )}
                           </div>
                         ) : (
                           <span className="inline-block px-2 py-0.5 rounded-full bg-accent-red/15 text-accent-red text-xs font-semibold">✗ Off</span>
@@ -125,11 +166,20 @@ function AdminAvailability() {
 }
 
 // ─── Employee view ────────────────────────────────────────────────────────────
+const SHIFT_OPTIONS = [
+  { value: null, label: 'Off' },
+  { value: 'lunch', label: 'Lunch' },
+  { value: 'dinner', label: 'Dinner' },
+  { value: 'both', label: 'Both' },
+];
+
+function emptyDays() {
+  return DAY_NAMES.map((_, i) => ({ day_of_week: i, shift_type: null, notes: '', status: null }));
+}
+
 function EmployeeAvailability() {
   const [weekStart, setWeekStart] = useState(nextMondayIso());
-  const [days, setDays] = useState(() => DAY_NAMES.map((_, i) => ({
-    day_of_week: i, available: true, start_time: '11:00', end_time: '22:00', notes: '',
-  })));
+  const [days, setDays] = useState(emptyDays);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -138,12 +188,12 @@ function EmployeeAvailability() {
         const next = DAY_NAMES.map((_, i) => {
           const row = res.days.find((d) => d.day_of_week === i);
           return row
-            ? { day_of_week: i, available: !!row.available, start_time: toHHMM(row.start_time) || '11:00', end_time: toHHMM(row.end_time) || '22:00', notes: row.notes || '' }
-            : { day_of_week: i, available: false, start_time: '11:00', end_time: '22:00', notes: '' };
+            ? { day_of_week: i, shift_type: row.available ? row.shift_type : null, notes: row.notes || '', status: row.status }
+            : { day_of_week: i, shift_type: null, notes: '', status: null };
         });
         setDays(next);
       } else {
-        setDays(DAY_NAMES.map((_, i) => ({ day_of_week: i, available: true, start_time: '11:00', end_time: '22:00', notes: '' })));
+        setDays(emptyDays());
       }
     });
   }, [weekStart]);
@@ -154,16 +204,30 @@ function EmployeeAvailability() {
 
   async function save() {
     setSaved(false);
-    await api.post('/api/availability', { week_start: weekStart, days });
+    await api.post('/api/availability', {
+      week_start: weekStart,
+      days: days.map(({ day_of_week, shift_type, notes }) => ({ day_of_week, shift_type, notes })),
+    });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+    // Refresh so any status reset (e.g. from a changed selection) shows immediately.
+    api.get(`/api/availability/me?week_start=${weekStart}`).then((res) => {
+      if (res.days && res.days.length) {
+        setDays(DAY_NAMES.map((_, i) => {
+          const row = res.days.find((d) => d.day_of_week === i);
+          return row
+            ? { day_of_week: i, shift_type: row.available ? row.shift_type : null, notes: row.notes || '', status: row.status }
+            : { day_of_week: i, shift_type: null, notes: '', status: null };
+        }));
+      }
+    });
   }
 
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="section-title">My availability</h1>
-        <p className="section-sub">Let the manager know when you can work next week.</p>
+        <p className="section-sub">Pick lunch, dinner, or both for each day the manager can schedule you. Times are set automatically.</p>
       </div>
 
       <div className="card">
@@ -179,25 +243,36 @@ function EmployeeAvailability() {
           {days.map((row, i) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-center bg-cream-200 rounded-2xl px-3 py-3">
               <div className="col-span-3 sm:col-span-2 font-display text-lg text-clay">{DAY_NAMES[i]}</div>
-              <label className="col-span-3 sm:col-span-2 flex items-center gap-2 text-sm text-clay">
-                <input type="checkbox" checked={row.available} onChange={(e) => update(i, { available: e.target.checked })} />
-                Available
-              </label>
+
+              <div className="col-span-9 sm:col-span-4 flex flex-wrap gap-1.5">
+                {SHIFT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => update(i, { shift_type: opt.value })}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition
+                      ${row.shift_type === opt.value
+                        ? 'bg-clay text-cream border-clay'
+                        : 'border-clay/20 text-clay/60 hover:border-clay/50'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="col-span-6 sm:col-span-3 text-xs text-clay/50">
+                {row.shift_type ? shiftTimeLabel(row.shift_type, DAY_NAMES[i]) : '—'}
+              </div>
+
               <input
-                type="time" className="input col-span-3 sm:col-span-3 disabled:opacity-50"
-                disabled={!row.available}
-                value={row.start_time} onChange={(e) => update(i, { start_time: e.target.value })}
-              />
-              <input
-                type="time" className="input col-span-3 sm:col-span-3 disabled:opacity-50"
-                disabled={!row.available}
-                value={row.end_time} onChange={(e) => update(i, { end_time: e.target.value })}
-              />
-              <input
-                className="input col-span-12 sm:col-span-2 disabled:opacity-50"
-                placeholder="Notes" disabled={!row.available}
+                className="input col-span-6 sm:col-span-2 disabled:opacity-50"
+                placeholder="Notes" disabled={!row.shift_type}
                 value={row.notes || ''} onChange={(e) => update(i, { notes: e.target.value })}
               />
+
+              <div className="col-span-12 sm:col-span-1 flex justify-end">
+                {row.status && <Badge status={row.status} />}
+              </div>
             </div>
           ))}
         </div>

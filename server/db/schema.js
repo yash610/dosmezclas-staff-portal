@@ -42,6 +42,7 @@ const statements = [
     id ${pkAuto},
     employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     shift_date TEXT NOT NULL,
+    shift_type TEXT,
     start_time TEXT NOT NULL,
     end_time TEXT NOT NULL,
     break_minutes INTEGER DEFAULT 30,
@@ -60,9 +61,12 @@ const statements = [
     week_start TEXT NOT NULL,
     day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
     available ${bool} NOT NULL DEFAULT ${boolTrue},
+    shift_type TEXT,
     start_time TEXT,
     end_time TEXT,
     notes TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    schedule_id INTEGER REFERENCES schedules(id) ON DELETE SET NULL,
     UNIQUE (employee_id, week_start, day_of_week)
   )`,
 
@@ -95,10 +99,30 @@ const statements = [
 
 const defaultRoles = ['Waiter', 'Bartender', 'Manager', 'Chipper', 'Cook', 'Dishwasher'];
 
+// Adds a column to an already-existing table. Safe to call every time
+// migrate() runs — if the column is already there this just fails quietly,
+// which is how we upgrade a live database without a real migration tool.
+async function addColumnIfMissing(table, columnDef) {
+  try {
+    await db.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`);
+  } catch (_) {
+    // Column already exists — nothing to do.
+  }
+}
+
 async function migrate() {
   for (const sql of statements) {
     await db.exec(sql);
   }
+
+  // Upgrade path for databases created before shift-type-based scheduling.
+  // No-ops on a fresh install since these columns are already in the
+  // CREATE TABLE statements above.
+  await addColumnIfMissing('availability', 'shift_type TEXT');
+  await addColumnIfMissing('availability', `status TEXT NOT NULL DEFAULT 'pending'`);
+  await addColumnIfMissing('availability', 'schedule_id INTEGER');
+  await addColumnIfMissing('schedules', 'shift_type TEXT');
+
   // Seed default roles if not present
   for (const name of defaultRoles) {
     try {

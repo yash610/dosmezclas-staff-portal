@@ -53,3 +53,21 @@ export function hoursBetween(start, end, breakMin = 0) {
 }
 
 export const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+// Display-only helpers mirroring server/lib/shiftTimes.js. The backend is
+// still the source of truth for the actual stored times — these just let the
+// UI show the right window before/without a round trip to the server.
+export function dinnerWindowLabel(weekdayAbbr) {
+  if (weekdayAbbr === 'Sun') return '3:00p – 8:00p';
+  if (weekdayAbbr === 'Fri' || weekdayAbbr === 'Sat') return '3:00p – 10:00p';
+  return '3:00p – 9:00p'; // Mon–Thu
+}
+
+export function shiftTimeLabel(shiftType, weekdayAbbr) {
+  if (shiftType === 'lunch') return '10:00a – 3:00p';
+  if (shiftType === 'dinner') return dinnerWindowLabel(weekdayAbbr);
+  if (shiftType === 'both') return `10:00a – ${dinnerWindowLabel(weekdayAbbr).split('–')[1].trim()}`;
+  return '';
+}
+
+export const SHIFT_TYPE_LABEL = { lunch: 'Lunch', dinner: 'Dinner', both: 'Both' };
