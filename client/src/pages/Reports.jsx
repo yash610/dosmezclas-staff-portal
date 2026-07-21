@@ -78,7 +78,13 @@ export default function Reports() {
         )}
         <div className="flex items-end gap-2 flex-wrap">
           {PRESETS.map((p) => (
-            <button key={p.key} className="btn-ghost text-xs py-1 px-3" onClick={() => applyPreset(p)}>{p.label}</button>
+            <button
+              key={p.key}
+              onClick={() => applyPreset(p)}
+              className="text-xs px-3 py-2 rounded-full border border-clay/20 text-clay/70 font-semibold hover:border-clay/50 hover:text-clay transition"
+            >
+              {p.label}
+            </button>
           ))}
         </div>
       </div>
