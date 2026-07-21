@@ -1,20 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { addDays, isoDate, DAY_NAMES, shiftTimeLabel, SHIFT_TYPE_LABEL } from '../lib/dates.js';
+import { isoDate, mondayOf, DAY_NAMES, shiftTimeLabel, SHIFT_TYPE_LABEL } from '../lib/dates.js';
 import Badge from '../components/Badge.jsx';
-
-function nextMondayIso() {
-  const today = new Date();
-  const offset = (8 - today.getDay()) % 7 || 7;
-  return isoDate(addDays(today, offset));
-}
 
 const SHIFT_LABELS = SHIFT_TYPE_LABEL;
 
 // ─── Admin view ───────────────────────────────────────────────────────────────
 function AdminAvailability() {
-  const [weekStart, setWeekStart] = useState(nextMondayIso());
+  const [weekStart, setWeekStart] = useState(isoDate(mondayOf()));
   const [grid, setGrid] = useState({});
   const [employees, setEmployees] = useState([]);
   const [busyId, setBusyId] = useState(null);
@@ -178,7 +172,7 @@ function emptyDays() {
 }
 
 function EmployeeAvailability() {
-  const [weekStart, setWeekStart] = useState(nextMondayIso());
+  const [weekStart, setWeekStart] = useState(isoDate(mondayOf()));
   const [days, setDays] = useState(emptyDays);
   const [saved, setSaved] = useState(false);
 
