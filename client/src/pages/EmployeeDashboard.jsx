@@ -32,7 +32,7 @@ export default function EmployeeDashboard() {
       </div>
 
       {pendingCount > 0 && (
-        <Link to="/schedule" className="block rounded-2xl border-2 border-dashed border-accent-orange/50 bg-accent-orange/10 px-4 py-3 text-sm text-accent-orange font-semibold hover:bg-accent-orange/15">
+        <Link to="/schedule" className="block rounded-2xl border-2 border-dashed border-accent-orange/60 bg-accent-orange/10 px-4 py-3 text-sm text-clay font-semibold hover:bg-accent-orange/15">
           You have {pendingCount} shift{pendingCount > 1 ? 's' : ''} awaiting your approval — tap to review →
         </Link>
       )}
@@ -55,13 +55,13 @@ export default function EmployeeDashboard() {
         ) : (
           <div className="space-y-3">
             {today.shifts.map((s) => (
-              <div key={s.id} className={`rounded-2xl p-4 flex items-center justify-between ${s.employee_approval === 'pending' ? 'border-2 border-dashed border-accent-orange/50 bg-cream-200/60' : 'bg-cream-200'}`}>
+              <div key={s.id} className={`rounded-2xl p-4 flex items-center justify-between ${s.employee_approval === 'pending' ? 'border-2 border-dashed border-accent-orange/60 bg-cream-200/60' : 'bg-cream-200'}`}>
                 <div>
                   <div className="font-display text-2xl text-clay">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</div>
                   <div className="text-clay/60 text-sm mt-1">{s.position || 'Floor'} · {s.break_minutes}m break</div>
                 </div>
                 {s.employee_approval === 'pending' ? (
-                  <span className="badge-yellow">Needs your OK</span>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-accent-orange text-white whitespace-nowrap">Needs your OK</span>
                 ) : (
                   <Badge status={s.status} />
                 )}
@@ -87,7 +87,11 @@ export default function EmployeeDashboard() {
                 </div>
                 <div className="text-right">
                   <div className="font-semibold text-clay">{fmtTime(s.start_time)} – {fmtTime(s.end_time)}</div>
-                  {s.employee_approval === 'pending' && <div className="text-[10px] text-accent-orange font-semibold uppercase tracking-wide">Needs your OK</div>}
+                  {s.employee_approval === 'pending' && (
+                    <span className="inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent-orange text-white uppercase tracking-wide">
+                      Needs your OK
+                    </span>
+                  )}
                 </div>
               </li>
             ))}

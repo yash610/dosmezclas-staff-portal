@@ -125,7 +125,7 @@ export default function Schedule() {
                 return (
                   <div
                     key={s.id}
-                    className={`rounded-2xl transition ${pending ? 'border-2 border-dashed border-accent-orange/50 bg-cream/60' : 'bg-cream shadow-warm'}`}
+                    className={`rounded-2xl transition ${pending ? 'border-2 border-dashed border-accent-orange/60 bg-cream/60' : 'bg-cream shadow-warm'}`}
                   >
                     <button
                       onClick={() => isAdmin && startEdit(s)}
@@ -150,12 +150,17 @@ export default function Schedule() {
                     {pending && (
                       <div className="px-3 pb-3">
                         {isAdmin ? (
-                          <div className="text-[10px] text-accent-orange font-semibold uppercase tracking-wide border-t border-clay/10 pt-2">
-                            Awaiting employee approval
+                          <div className="border-t border-clay/10 pt-2">
+                            <span className="inline-block px-2 py-0.5 rounded-full bg-accent-orange text-white text-[10px] font-bold uppercase tracking-wide">
+                              Awaiting employee approval
+                            </span>
                           </div>
                         ) : (
                           <div className="border-t border-clay/10 pt-2 space-y-1.5">
-                            <div className="text-xs text-accent-orange font-semibold">Manager assigned you this shift on a day you're off.</div>
+                            <span className="inline-block px-2 py-0.5 rounded-full bg-accent-orange text-white text-[10px] font-bold uppercase tracking-wide">
+                              Needs your approval
+                            </span>
+                            <div className="text-xs text-clay font-medium">Manager assigned you this shift on a day you're off.</div>
                             <div className="flex gap-1.5">
                               <button
                                 disabled={busyId === s.id}
@@ -203,7 +208,7 @@ export default function Schedule() {
       >
         {shiftErr && <div className="text-accent-red text-sm mb-3">{shiftErr}</div>}
         {editing && editing !== 'new' && editing.employee_approval === 'pending' && (
-          <div className="text-xs text-accent-orange bg-accent-orange/10 rounded-xl px-3 py-2 mb-3">
+          <div className="text-xs text-clay font-medium bg-accent-orange/15 border border-accent-orange/40 rounded-xl px-3 py-2 mb-3">
             This shift is still awaiting the employee's approval — they marked themselves off that day.
           </div>
         )}
