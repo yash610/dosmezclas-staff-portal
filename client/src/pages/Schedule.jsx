@@ -165,12 +165,12 @@ export default function Schedule() {
                               <button
                                 disabled={busyId === s.id}
                                 onClick={() => respond(s.id, 'approved')}
-                                className="text-xs px-2 py-1 rounded-full bg-accent-green/15 text-accent-green font-semibold hover:bg-accent-green/25 disabled:opacity-50"
+                                className="text-xs px-3 py-1.5 rounded-full bg-accent-green text-white font-bold hover:opacity-90 disabled:opacity-50"
                               >Approve</button>
                               <button
                                 disabled={busyId === s.id}
                                 onClick={() => respond(s.id, 'rejected')}
-                                className="text-xs px-2 py-1 rounded-full bg-accent-red/15 text-accent-red font-semibold hover:bg-accent-red/25 disabled:opacity-50"
+                                className="text-xs px-3 py-1.5 rounded-full bg-accent-red text-white font-bold hover:opacity-90 disabled:opacity-50"
                               >Reject</button>
                             </div>
                           </div>
@@ -208,7 +208,7 @@ export default function Schedule() {
       >
         {shiftErr && <div className="text-accent-red text-sm mb-3">{shiftErr}</div>}
         {editing && editing !== 'new' && editing.employee_approval === 'pending' && (
-          <div className="text-xs text-clay font-medium bg-accent-orange/15 border border-accent-orange/40 rounded-xl px-3 py-2 mb-3">
+          <div className="text-sm text-white font-semibold bg-accent-orange rounded-xl px-3 py-2 mb-3">
             This shift is still awaiting the employee's approval — they marked themselves off that day.
           </div>
         )}
